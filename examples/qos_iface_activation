@@ -1,0 +1,59 @@
+#!/bin/bash
+
+if [ -z "$IFACE" ] ; then
+    echo "usage: $0 can be run from /etc/network/if-up.d/ via a symlink for example"
+    exit 1
+fi
+
+marking()
+{
+    local IFACE="$1"
+
+    /sbin/iptables -t mangle -N marking
+    /sbin/iptables -t mangle -F marking
+
+    # CS1 # low priority toward Internet
+    /sbin/iptables -t mangle -A marking -p tcp --dport ftp -j DSCP --set-dscp-class CS1
+    /sbin/iptables -t mangle -A marking -p tcp --sport ftp -j DSCP --set-dscp-class CS1
+    /sbin/iptables -t mangle -A marking -p tcp --dport ftp-data -j DSCP --set-dscp-class CS1
+    /sbin/iptables -t mangle -A marking -p tcp --sport ftp-data -j DSCP --set-dscp-class CS1
+    /sbin/iptables -t mangle -A marking -p tcp --dport nntp -j DSCP --set-dscp-class CS1
+    /sbin/iptables -t mangle -A marking -p tcp --sport nntp -j DSCP --set-dscp-class CS1
+    /sbin/iptables -t mangle -A marking -p tcp --dport pop3 -j DSCP --set-dscp-class CS1
+    /sbin/iptables -t mangle -A marking -p tcp --sport pop3 -j DSCP --set-dscp-class CS1
+    /sbin/iptables -t mangle -A marking -p tcp --dport smtp -j DSCP --set-dscp-class CS1
+    /sbin/iptables -t mangle -A marking -p tcp --dport smtps -j DSCP --set-dscp-class CS1
+    /sbin/iptables -t mangle -A marking -p tcp --dport imaps -j DSCP --set-dscp-class CS1
+
+    # AF41 # high bandwidth
+    /sbin/iptables -t mangle -A marking -p tcp --dport nfs -j DSCP --set-dscp-class AF41
+    /sbin/iptables -t mangle -A marking -p tcp --sport nfs -j DSCP --set-dscp-class AF41
+    /sbin/iptables -t mangle -A marking -p udp --dport nfs -j DSCP --set-dscp-class AF41
+    /sbin/iptables -t mangle -A marking -p udp --sport nfs -j DSCP --set-dscp-class AF41
+    /sbin/iptables -t mangle -A marking --match length --length 40:80 --match dscp --dscp-class CS0 -j DSCP --set-dscp-class AF41
+
+    # EF # high priority
+    /sbin/iptables -t mangle -A marking -p udp --dport ntp -j DSCP --set-dscp-class EF
+    /sbin/iptables -t mangle -A marking -p udp --sport ntp -j DSCP --set-dscp-class EF
+
+    # AF13 # low priority - local (freebox)
+    /sbin/iptables -t mangle -A marking -s 212.27.38.253 -j DSCP --set-dscp-class AF13
+    /sbin/iptables -t mangle -A marking -d 212.27.38.253 -j DSCP --set-dscp-class AF13
+
+    /sbin/iptables -t mangle -D POSTROUTING -o "$IFACE" -j marking 1> /dev/null 2> /dev/null
+    /sbin/iptables -t mangle -A POSTROUTING -o "$IFACE" -j marking
+}
+
+case "$IFACE" in
+    enp5s0)
+    # toward Internet
+	/root/Scripts/qos_queues "$IFACE" 1000000000 1500
+	;;
+    enp6s0)
+    # toward internal LAN
+	/root/Scripts/qos_queues "$IFACE" 1000000000 9000
+	;;
+    admin|lan)
+	marking "$IFACE"
+	;;
+esac

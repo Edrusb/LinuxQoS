@@ -1,0 +1,80 @@
+#!/bin/bash
+
+if [ -z "$1" -o -z "$2" -o -z "$3" ] ; then
+    echo "usage: $0 <interface> <max bandwidth (bit/s)> <MTU (o)> [<over bandwidth (bit/s)>]"
+    echo "if <over bandwidth> is specified, AF13 (DSCP 14) traffic is lowest priority but can have up to <over bandwidth>"
+    echo "EF (DSCP 46) traffic goes in strict priority queue but is limited to <max bandwidth/2>"
+    echo "AF43 (DSCP 38) traffic can use up to <max bandwidth> and has a ratio of 50% in case of congestion"
+    echo "CS1 (DSCP 8) traffic can use up to <max bandwidth> and has a ratio of 10% in case of congestion"
+    echo "other DSCP traffic use the default queue and has a ratio of 40% in case of congestion"
+    exit 1
+fi
+
+DEV="$1"
+MAX="$2"
+MTU="$3"
+MAXOVER="$4"
+R2_1="$(( $MAX / 2 ))"
+R10_1="$(( $MAX / 10 ))"
+R10_4="$(( 4 * $R10_1 ))"
+R10_5="$(( 5 * $R10_1 ))"
+
+if [ -z "$MAXOVER" ]; then
+    MAXOVER="$MAX"
+fi
+
+R2Q="$(( $R10_1 / ($MTU * 8) ))"
+
+if [ $R2Q -le 0 ] ; then
+    R2Q=1
+fi
+
+echo "R2Q = $R2Q"
+
+### queue configuration:
+#   queue 1:10 traffic with high bandiwdth but the link is idle (low priority queue)
+#   queue 1:20 non interactive non urgent traffic
+#   queue 1:30 default queue
+#   queue 1:40 high priority traffic
+#   queue 1:50 latency sensible traffic (strict priority queue)
+
+/sbin/tc qdisc del dev $DEV root 1> /dev/null 2> /dev/null
+/sbin/tc qdisc add dev $DEV root handle 1: htb default 30 r2q $R2Q
+
+/sbin/tc class add dev $DEV classid 1:1 parent 1: htb rate "$MAXOVER" ceil "$MAXOVER"
+/sbin/tc class add dev $DEV classid 1:10 parent 1:1 htb rate "$R2_1"  ceil "$MAXOVER" prio 2
+/sbin/tc class add dev $DEV classid 1:20 parent 1:1 htb rate "$R10_1" ceil "$MAX"     prio 1
+/sbin/tc class add dev $DEV classid 1:30 parent 1:1 htb rate "$R10_4" ceil "$MAX"     prio 1
+/sbin/tc class add dev $DEV classid 1:40 parent 1:1 htb rate "$R10_5" ceil "$MAX"     prio 1
+/sbin/tc class add dev $DEV classid 1:50 parent 1:1 htb rate "$R2_1"  ceil "$R2_1"    prio 0
+
+/sbin/tc qdisc add dev $DEV parent 1:10 handle 10: sfq perturb 10
+/sbin/tc qdisc add dev $DEV parent 1:20 handle 20: sfq perturb 10
+/sbin/tc qdisc add dev $DEV parent 1:30 handle 30: sfq perturb 10
+/sbin/tc qdisc add dev $DEV parent 1:40 handle 40: sfq perturb 10
+/sbin/tc qdisc add dev $DEV parent 1:50 handle 50: sfq perturb 10
+
+
+## Champ ToS = DSCP (6 bits) + ECN (2 bits)
+## DSCP EF   (46) = 101110 / 1011-10xx / 0xB8 + mask 0xFC
+## DSCP AF41 (34) = 100010 / 1000-10xx / 0x88 + mask 0xFC
+## DSCP CS1   (8) = 001000 / 0010-00xx / 0x20 + mask 0xFC
+## DSCP AF13 (14) = 001110 / 0011-10xx / 0x38 + mask 0xFC
+
+# protocol 802.1q positionne l'offset 0 au début de la trame IP, pour lire l'ethertype il faut aller 2 octets avant
+# afin de savoir si c'est de l'IPv4 ou de l'IPv6 et donc utiliser dsfield ou priority (ToS n'est pas au même endroit
+# entre IPv4 et IPv6 (traffic class)
+
+/sbin/tc filter add dev $DEV parent 1:0 prio 41 protocol 802.1q u32 match u16 0x0800 0xFFFF at -2 match ip dsfield 0xB8 0xFC classid 1:50
+/sbin/tc filter add dev $DEV parent 1:0 prio 42 protocol 802.1q u32 match u16 0x0800 0xFFFF at -2 match ip dsfield 0x88 0xFC classid 1:40
+/sbin/tc filter add dev $DEV parent 1:0 prio 43 protocol 802.1q u32 match u16 0x0800 0xFFFF at -2 match ip dsfield 0x20 0xFC classid 1:20
+
+/sbin/tc filter add dev $DEV parent 1:0 prio 51 protocol 802.1q u32 match u16 0x86DD 0xFFFF at -2 match ip6 priority 0xB8 0xFC classid 1:50
+/sbin/tc filter add dev $DEV parent 1:0 prio 52 protocol 802.1q u32 match u16 0x86DD 0xFFFF at -2 match ip6 priority 0x88 0xFC classid 1:40
+/sbin/tc filter add dev $DEV parent 1:0 prio 53 protocol 802.1q u32 match u16 0x86DD 0xFFFF at -2 match ip6 priority 0x20 0xFC classid 1:20
+
+if [ ! -z "$3" ] ; then
+    /sbin/tc filter add dev $DEV parent 1:0 prio 44 protocol 802.1q u32 match u16 0x0800 0xFFFF at -2 match ip dsfield 0x38 0xFC classid 1:10
+    /sbin/tc filter add dev $DEV parent 1:0 prio 54 protocol 802.1q u32 match u16 0x86DD 0xFFFF at -2 match ip6 priority 0x38 0xFC classid 1:10
+fi
+
