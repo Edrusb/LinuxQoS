@@ -102,5 +102,5 @@ we say htb class to provide hierarchical QoS (aka nested QoS) it also provides p
 we have been user filter bases on FW MARK, there is many other way to setup filter
 
 # Examples
-the example subdirectory contains several scripts that were functionning at a time, you can use them as a base of 
+the /examples subdirectory contains several scripts that were functionning at a time, you can use them as a base of 
  
