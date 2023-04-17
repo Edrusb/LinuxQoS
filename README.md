@@ -28,7 +28,9 @@ Now that packet have been eventually marked we can setup a filter to define the 
     /sbin/tc filter add dev eth0 parent 1:0 protocol ip prio 2 handle 6 fw flowid 1:10
     # all packets associated with mark 6 will be placed in the queue which id is 1:10
     
-A useful command to see how filter get applied is **tc filter dev eth0**
+A useful command to see how filter get applied is 
+
+    tc filter dev eth0
 
 ### Queue Disciplines
 
@@ -70,6 +72,13 @@ The link between the class and the qdisc is set in the qdisc definition seen abo
  
 In conclusion, and to end the packet emission process, when its the turn to class 1:10 to emit a packet regarding other classes definititons and parent class definition, the queue 10: is asked a packet that if present is sent over then network
 
+## Troubleshooting and observations
+
+A couple of very interesting command  to see the QoS in action is:
+
+    tc -s class show dev eth0
+    tc -s qdisc show dev eth0
+
 ## Putting things in the correct order
 We followed above the order of transmission of a packet from the application to the network information card (NIC), now let's put back in place the objects regarding their definitions and dependencies in the Linux kernel:
 
@@ -92,5 +101,6 @@ we say sfq queues, there are other types
 we say htb class to provide hierarchical QoS (aka nested QoS) it also provides priority queuing, there is alternative like pure priority queuing and so on
 we have been user filter bases on FW MARK, there is many other way to setup filter
 
-
+# Examples
+the example subdirectory contains several scripts that were functionning at a time, you can use them as a base of 
  
