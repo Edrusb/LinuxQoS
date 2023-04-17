@@ -15,13 +15,11 @@ By default in linux this is a FIFO queing (pfifo_fast). I replaced the default q
 ### Filters
 you can base filters on a mark placed by netfilter (iptables), this is far the most flexible way of implementing filters. Note that without filter all packet go to the default queue, so there is no issue setting up qdisc and class before filters. 
 
-> 
-> iptables -t mangle -A PREROUTING  -i eth0 -d 1.2.3.0/24 -j MARK --set-mark 6
-> /# all packets sent to any IP of 1.2.3.0/24 subnet will be associated with the mark 6 
-> /# in the Linux kernel. The packet are not modified, this is not DSCP or CoS field.
-> /# Once the packet get emmited to the network the mark is forgotten.
-> /# Modifying DSCP field is done using iptables but that another topic 
->
+    iptables -t mangle -A PREROUTING  -i eth0 -d 1.2.3.0/24 -j MARK --set-mark 6
+    # all packets sent to any IP of 1.2.3.0/24 subnet will be associated with the mark 6 
+    # in the Linux kernel. The packet are not modified, this is not DSCP or CoS field.
+    # Once the packet get emmited to the network the mark is forgotten.
+    # Modifying DSCP field is done using iptables but that another topic 
 
 A useful command to see how filter get applied is **tc filter dev eth0**
 
