@@ -103,5 +103,5 @@ we mentionned **htb** class to provide hierarchical QoS (aka nested QoS) it also
 we have been user filter bases on **FW MARK**, there is many other way to setup filter
 
 # Examples
-the /examples subdirectory of this git repo contains several scripts that were functionning at a time, you can use them as a base of 
+the [/examples](https://github.com/Edrusb/LinuxQoS/tree/main/examples) subdirectory of this git repo contains several scripts that were functionning at a time, you can use them as a base of 
  
